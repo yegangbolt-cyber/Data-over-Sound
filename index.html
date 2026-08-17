@@ -1,0 +1,922 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101114">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="./manifest.webmanifest">
+<title>Acoustic Transfer</title>
+<style>
+:root{color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:#101114;color:#f1f1f1;font-family:system-ui,-apple-system,"Noto Sans KR",sans-serif;-webkit-tap-highlight-color:transparent}
+main{max-width:760px;margin:auto;padding:14px 13px 50px}
+h1{font-size:22px;margin:7px 2px 13px}
+h2{font-size:18px;margin:4px 0 12px}
+.card{background:#191b20;border:1px solid #30333a;border-radius:17px;padding:14px;margin-bottom:12px}
+.tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.tab{background:#24272d;color:#bbb}
+.tab.on{background:#f1f1f1;color:#111}
+button,select,input{font:inherit}
+button{border:0;border-radius:13px;min-height:50px;padding:9px 13px;font-weight:750;background:#eee;color:#111}
+button:disabled{opacity:.4}
+button:active{transform:scale(.985)}
+.secondary{background:#2a2d33;color:#eee}
+.danger{background:#44252a;color:#fff}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+label{display:block;color:#aeb2bb;font-size:13px;margin:8px 0 5px}
+input[type=file],select{width:100%;min-height:49px;padding:8px 10px;background:#24272d;color:#eee;border:1px solid #393d45;border-radius:12px}
+textarea{width:100%;height:180px;padding:11px;background:#111318;color:#eee;border:1px solid #333740;border-radius:13px;resize:vertical;line-height:1.45}
+.info{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:13px;line-height:1.55;white-space:pre-wrap;word-break:break-word}
+.muted{font-size:12px;color:#9297a1;line-height:1.5}
+.big{font-size:25px;font-weight:800}
+progress{width:100%;height:17px;margin:8px 0}
+.row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pill{display:inline-block;background:#292d34;border-radius:999px;padding:5px 9px;font-size:12px;color:#cfd2d8}
+#sendPane[hidden],#recvPane[hidden],#textBox[hidden],#result[hidden]{display:none}
+audio{width:100%;margin-top:8px}
+#preview{max-height:220px;overflow:auto;background:#101216;border-radius:11px;padding:10px;white-space:pre-wrap;font-family:monospace;font-size:12px}
+.install{width:100%;margin-bottom:12px;background:#27334b;color:#fff}
+.switch{display:flex;gap:8px}
+.switch button{flex:1}
+hr{border:0;border-top:1px solid #30333a;margin:14px 0}
+@media(max-width:430px){.grid3{grid-template-columns:1fr}.big{font-size:23px}}
+</style>
+</head>
+<body>
+<main>
+<h1>Acoustic Transfer</h1>
+<button id="install" class="install" hidden>앱으로 설치</button>
+
+<div class="tabs">
+<button class="tab on" id="tabSend">보내기</button>
+<button class="tab" id="tabRecv">받기</button>
+</div>
+
+<section id="sendPane">
+<div class="card">
+<h2>전송할 데이터</h2>
+<div class="switch">
+<button id="pickFileMode">파일</button>
+<button id="pickTextMode" class="secondary">텍스트</button>
+</div>
+
+<div id="fileBox">
+<label>파일 · 최대 500KB · 형식 제한 없음</label>
+<input id="sendFile" type="file">
+</div>
+
+<div id="textBox" hidden>
+<label>텍스트</label>
+<textarea id="sendText" placeholder="보낼 텍스트를 입력하세요."></textarea>
+<label>저장될 파일명</label>
+<input id="textName" value="message.txt">
+</div>
+
+<div id="fileInfo" class="info" style="margin-top:10px">선택된 데이터 없음</div>
+
+<label>전송 속도</label>
+<select id="mode">
+<option value="robust">안정 · 가장 강함</option>
+<option value="standard" selected>표준 · 권장</option>
+<option value="fast">고속 · 가까운 거리</option>
+<option value="turbo">터보 · 좋은 음향 환경 / 실험</option>
+</select>
+
+<div class="grid2">
+<div>
+<label>압축</label>
+<select id="compression">
+<option value="auto" selected>자동</option>
+<option value="off">사용 안 함</option>
+<option value="on">가능하면 사용</option>
+</select>
+</div>
+<div>
+<label>프레임 반복</label>
+<select id="repeat">
+<option value="1" selected>×1</option>
+<option value="2">×2</option>
+<option value="3">×3</option>
+</select>
+</div>
+</div>
+
+<div id="estimate" class="info" style="margin-top:11px">파일을 선택하면 예상 시간이 표시됩니다.</div>
+</div>
+
+<div class="card">
+<div class="grid2">
+<button id="transmit">▶ 바로 소리 전송</button>
+<button id="wav" class="secondary">WAV 생성</button>
+</div>
+<button id="stopSend" class="danger" style="width:100%;margin-top:8px">전송 중지</button>
+<progress id="sendProgress" max="1" value="0"></progress>
+<div id="sendStatus" class="info">대기</div>
+<audio id="wavPreview" controls></audio>
+</div>
+</section>
+
+<section id="recvPane" hidden>
+<div class="card">
+<h2>입력 방식</h2>
+<div class="grid3">
+<button id="micStart">마이크 수신</button>
+<button id="micStop" class="secondary">마이크 중지</button>
+<button id="rxReset" class="danger">수신 초기화</button>
+</div>
+
+<hr>
+
+<label>음향 파일로 모의실험 · WAV/MP3 등</label>
+<input id="audioFile" type="file" accept="audio/*,.wav,.mp3,.m4a,.ogg">
+<div class="grid2" style="margin-top:8px">
+<button id="analyze" class="secondary">최고속 분석</button>
+<button id="simulate" class="secondary">1배속 시뮬레이션</button>
+</div>
+</div>
+
+<div class="card">
+<div id="rxHeadline" class="big">대기</div>
+<progress id="rxProgress" max="1" value="0"></progress>
+<div id="rxStatus" class="info">수신을 시작하거나 음향 파일을 선택하세요.</div>
+<div class="row" style="margin-top:9px">
+<span class="pill" id="signalPill">동기 0</span>
+<span class="pill" id="goodPill">정상 0</span>
+<span class="pill" id="badPill">오류 0</span>
+</div>
+</div>
+
+<div class="card" id="result" hidden>
+<h2>복원 완료</h2>
+<div id="resultInfo" class="info"></div>
+<div class="grid2" style="margin-top:9px">
+<button id="downloadResult">원본 파일 저장</button>
+<button id="copyText" class="secondary">텍스트 복사</button>
+</div>
+<div id="preview" style="margin-top:10px"></div>
+</div>
+
+<div class="muted">
+마이크 수신은 HTTPS(GitHub Pages) 또는 설치된 앱에서 사용하십시오. 같은 전송을 다시 들려주면 이미 받은 정상 프레임은 유지되고 누락된 프레임만 채워집니다.
+</div>
+</section>
+</main>
+
+<script>
+'use strict';
+
+/* ======================== 기본값 ======================== */
+const FS=48000;
+const LIMIT=500*1024;
+const LEAD_N=3840;
+const LEAD_F1=600;
+const LEAD_F2=1800;
+const LEAD_GAP=480;
+const SCAN_N=256;
+const SEARCH_PAD=768;
+const SYNC_N=2048;
+const SYNC_F0=650;
+const SYNC_F1=5600;
+const GAP1=240;
+const MODE_N=960;
+const MODE_GAP=240;
+const MODE_FREQ=[900,1300,1700,2100];
+const INTER_GAP=480;
+const FRAME_HEADER=16;
+const CONTAINER_HEADER=24;
+const PHASE=[0,Math.PI/2,Math.PI,-Math.PI/2];
+
+const MODES={
+ robust:{id:0,label:'안정',N:1024,cp:192,bins:Array.from({length:32},(_,i)=>20+i*2),payload:1024},
+ standard:{id:1,label:'표준',N:512,cp:128,bins:Array.from({length:48},(_,i)=>10+i),payload:1536},
+ fast:{id:2,label:'고속',N:512,cp:96,bins:Array.from({length:64},(_,i)=>8+i),payload:2048},
+ turbo:{id:3,label:'터보',N:256,cp:80,bins:Array.from({length:40},(_,i)=>5+i),payload:1600}
+};
+const MODE_BY_ID=Object.fromEntries(Object.values(MODES).map(x=>[x.id,x]));
+
+const $=x=>document.getElementById(x);
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const fmtBytes=n=>n<1024?n+' B':n<1048576?(n/1024).toFixed(1)+' KB':(n/1048576).toFixed(1)+' MB';
+const fmtTime=s=>s<60?s.toFixed(1)+'초':Math.floor(s/60)+'분 '+Math.round(s%60)+'초';
+
+let inputKind='file',prepared=null,lastWavURL='',sendStop=false,installPrompt=null;
+
+/* ======================== UI / PWA ======================== */
+function showPane(which){
+ const send=which==='send';
+ $('sendPane').hidden=!send;$('recvPane').hidden=send;
+ $('tabSend').classList.toggle('on',send);
+ $('tabRecv').classList.toggle('on',!send);
+}
+$('tabSend').onclick=()=>showPane('send');
+$('tabRecv').onclick=()=>showPane('recv');
+
+$('pickFileMode').onclick=()=>{
+ inputKind='file';$('fileBox').hidden=false;$('textBox').hidden=true;
+ $('pickFileMode').className='';$('pickTextMode').className='secondary';prepared=null;refreshInput();
+};
+$('pickTextMode').onclick=()=>{
+ inputKind='text';$('fileBox').hidden=true;$('textBox').hidden=false;
+ $('pickTextMode').className='';$('pickFileMode').className='secondary';prepared=null;refreshInput();
+};
+
+window.addEventListener('beforeinstallprompt',e=>{
+ e.preventDefault();installPrompt=e;$('install').hidden=false;
+});
+$('install').onclick=async()=>{
+ if(!installPrompt)return;
+ installPrompt.prompt();await installPrompt.userChoice;
+ installPrompt=null;$('install').hidden=true;
+};
+if('serviceWorker' in navigator && location.protocol.startsWith('http')){
+ navigator.serviceWorker.register('./sw.js').catch(()=>{});
+}
+
+/* ======================== CRC / Binary ======================== */
+function crc32(a){
+ let c=0xffffffff;
+ for(let j=0;j<a.length;j++){
+  c^=a[j];
+  for(let i=0;i<8;i++)c=(c>>>1)^((c&1)?0xedb88320:0);
+ }
+ return(c^0xffffffff)>>>0;
+}
+function w16(a,o,v){a[o]=v&255;a[o+1]=v>>>8&255}
+function w32(a,o,v){a[o]=v&255;a[o+1]=v>>>8&255;a[o+2]=v>>>16&255;a[o+3]=v>>>24&255}
+function r16(a,o){return a[o]|a[o+1]<<8}
+function r32(a,o){return(a[o]|a[o+1]<<8|a[o+2]<<16|a[o+3]<<24)>>>0}
+function concat(arrays,total){
+ let n=total??arrays.reduce((s,a)=>s+a.length,0),o=new Uint8Array(n),p=0;
+ for(const a of arrays){o.set(a,p);p+=a.length}
+ return o;
+}
+
+/* ======================== 압축 / 컨테이너 ======================== */
+function compressible(name,type){
+ let n=name.toLowerCase();
+ return type.startsWith('text/') ||
+  /(\.txt|\.html?|\.css|\.js|\.json|\.xml|\.csv|\.md|\.svg|\.log|\.ini|\.yaml|\.yml)$/i.test(n);
+}
+async function gzip(data){
+ if(!('CompressionStream'in window))throw new Error('이 브라우저는 GZIP 압축을 지원하지 않습니다.');
+ let cs=new CompressionStream('gzip'),w=cs.writable.getWriter();
+ await w.write(data);await w.close();
+ return new Uint8Array(await new Response(cs.readable).arrayBuffer());
+}
+async function gunzip(data){
+ if(!('DecompressionStream'in window))throw new Error('이 브라우저는 GZIP 해제를 지원하지 않습니다.');
+ let ds=new DecompressionStream('gzip'),w=ds.writable.getWriter();
+ await w.write(data);await w.close();
+ return new Uint8Array(await new Response(ds.readable).arrayBuffer());
+}
+async function withTimeout(p,ms){
+ return Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej(new Error('압축 시간 초과')),ms))]);
+}
+
+async function currentInput(){
+ if(inputKind==='text'){
+  let data=new TextEncoder().encode($('sendText').value);
+  return{name:$('textName').value.trim()||'message.txt',type:'text/plain;charset=utf-8',data};
+ }
+ let f=$('sendFile').files[0];
+ if(!f)throw new Error('파일을 선택하세요.');
+ if(f.size>LIMIT)throw new Error('500KB 이하 파일만 사용할 수 있습니다.');
+ return{name:f.name,type:f.type||'application/octet-stream',data:new Uint8Array(await f.arrayBuffer())};
+}
+
+async function buildContainer(){
+ let input=await currentInput();
+ if(input.data.length>LIMIT)throw new Error('원본 데이터가 500KB를 초과합니다.');
+
+ let c=$('compression').value,data=input.data,flag=0;
+ let doZip=c==='on'||(c==='auto'&&compressible(input.name,input.type));
+
+ if(doZip && input.data.length>32){
+  try{
+   let z=await withTimeout(gzip(input.data),3000);
+   if(c==='on'||z.length<input.data.length){data=z;flag=1}
+  }catch(e){}
+ }
+
+ let name=new TextEncoder().encode(input.name);
+ let mime=new TextEncoder().encode(input.type);
+ if(name.length>65535||mime.length>65535)throw new Error('파일 정보가 너무 깁니다.');
+
+ let h=new Uint8Array(CONTAINER_HEADER);
+ h.set([65,70,84,49],0); // AFT1
+ h[4]=1;h[5]=flag;
+ w16(h,6,name.length);w16(h,8,mime.length);
+ w32(h,10,input.data.length);
+ w32(h,14,data.length);
+ w32(h,18,crc32(data));
+ w16(h,22,0);
+
+ return{input,flag,data,bytes:concat([h,name,mime,data])};
+}
+
+function random16(){
+ let a=new Uint16Array(1);
+ crypto.getRandomValues(a);
+ return a[0];
+}
+
+function buildFrames(container,mode,txid){
+ let total=Math.ceil(container.length/mode.payload),out=new Array(total);
+ for(let seq=0;seq<total;seq++){
+  let p0=seq*mode.payload,p1=Math.min(container.length,p0+mode.payload);
+  let pay=container.slice(p0,p1);
+  let h=new Uint8Array(FRAME_HEADER);
+  h[0]=0xd3;h[1]=0x91;h[2]=1;h[3]=mode.id;
+  w16(h,4,seq);w16(h,6,total);w16(h,8,pay.length);w16(h,10,txid);
+  let check=new Uint8Array(12+pay.length);check.set(h.slice(0,12));check.set(pay,12);
+  w32(h,12,crc32(check));
+  out[seq]=concat([h,pay]);
+ }
+ return out;
+}
+
+/* ======================== FFT / OFDM ======================== */
+function fft(re,im,inverse=false){
+ const n=re.length;
+ for(let i=1,j=0;i<n;i++){
+  let bit=n>>1;
+  for(;j&bit;bit>>=1)j^=bit;
+  j^=bit;
+  if(i<j){
+   let t=re[i];re[i]=re[j];re[j]=t;
+   t=im[i];im[i]=im[j];im[j]=t;
+  }
+ }
+ for(let len=2;len<=n;len<<=1){
+  let ang=(inverse?2:-2)*Math.PI/len,wr0=Math.cos(ang),wi0=Math.sin(ang);
+  for(let i=0;i<n;i+=len){
+   let wr=1,wi=0,half=len>>1;
+   for(let j=0;j<half;j++){
+    let u=i+j,v=u+half;
+    let vr=re[v]*wr-im[v]*wi,vi=re[v]*wi+im[v]*wr;
+    let ur=re[u],ui=im[u];
+    re[u]=ur+vr;im[u]=ui+vi;re[v]=ur-vr;im[v]=ui-vi;
+    let nw=wr*wr0-wi*wi0;
+    wi=wr*wi0+wi*wr0;wr=nw;
+   }
+  }
+ }
+ if(inverse)for(let i=0;i<n;i++){re[i]/=n;im[i]/=n}
+}
+
+function ofdmTime(phases,cfg){
+ let N=cfg.N,re=new Float32Array(N),im=new Float32Array(N);
+ for(let i=0;i<cfg.bins.length;i++){
+  let k=cfg.bins[i],p=phases[i],cr=Math.cos(p),ci=Math.sin(p);
+  re[k]=cr;im[k]=ci;re[N-k]=cr;im[N-k]=-ci;
+ }
+ fft(re,im,true);
+ let mx=0;
+ for(let i=0;i<N;i++)mx=Math.max(mx,Math.abs(re[i]));
+ let scale=mx?0.72/mx:1,L=N+cfg.cp,out=new Float32Array(L);
+ for(let i=0;i<cfg.cp;i++)out[i]=re[N-cfg.cp+i]*scale;
+ for(let i=0;i<N;i++)out[cfg.cp+i]=re[i]*scale;
+ return out;
+}
+
+function encodeOFDMPacket(bytes,cfg){
+ let B=cfg.bins.length/4; // 2bit/carrier = K/4 bytes
+ let phases=new Float32Array(cfg.bins.length);
+ let symbols=[ofdmTime(phases,cfg)];
+
+ for(let p=0;p<bytes.length;p+=B){
+  let chunk=bytes.subarray(p,Math.min(bytes.length,p+B));
+  for(let c=0;c<cfg.bins.length;c++){
+   let bit=c*2,bi=bit>>3,sh=bit&7;
+   let val=bi<chunk.length?(chunk[bi]>>sh)&3:0;
+   phases[c]+=PHASE[val];
+  }
+  symbols.push(ofdmTime(phases,cfg));
+ }
+ return symbols;
+}
+
+function carrierSpectrum(block,cfg){
+ let N=cfg.N,re=new Float32Array(N),im=new Float32Array(N);
+ for(let i=0;i<N;i++)re[i]=block[cfg.cp+i];
+ fft(re,im,false);
+ let cr=new Float32Array(cfg.bins.length),ci=new Float32Array(cfg.bins.length);
+ for(let i=0;i<cfg.bins.length;i++){let k=cfg.bins[i];cr[i]=re[k];ci[i]=im[k]}
+ return{re:cr,im:ci};
+}
+function decodeDiff(prev,cur,cfg){
+ let B=cfg.bins.length/4,out=new Uint8Array(B),quality=0;
+ for(let c=0;c<cfg.bins.length;c++){
+  let dot=cur.re[c]*prev.re[c]+cur.im[c]*prev.im[c];
+  let cross=cur.im[c]*prev.re[c]-cur.re[c]*prev.im[c];
+  let a=Math.atan2(cross,dot);
+  let q=((Math.round(a/(Math.PI/2))%4)+4)%4;
+  let bit=c*2,bi=bit>>3,sh=bit&7;
+  out[bi]|=q<<sh;
+  let err=Math.abs(Math.atan2(Math.sin(a-PHASE[q]),Math.cos(a-PHASE[q])));
+  quality+=1-Math.min(1,err/(Math.PI/4));
+ }
+ return{bytes:out,quality:quality/cfg.bins.length};
+}
+
+/* ======================== 동기 신호 ======================== */
+function makeLead(){
+ let a=new Float32Array(LEAD_N);
+ for(let i=0;i<LEAD_N;i++){
+  let edge=Math.min(1,i/120,(LEAD_N-1-i)/120);
+  a[i]=.34*edge*(Math.sin(2*Math.PI*LEAD_F1*i/FS)+Math.sin(2*Math.PI*LEAD_F2*i/FS));
+ }
+ return a;
+}
+const LEAD=makeLead();
+const LEAD_SIL=new Float32Array(LEAD_GAP);
+
+function makeChirp(){
+ let a=new Float32Array(SYNC_N),dur=SYNC_N/FS,k=(SYNC_F1-SYNC_F0)/dur;
+ for(let i=0;i<SYNC_N;i++){
+  let t=i/FS,phase=2*Math.PI*(SYNC_F0*t+.5*k*t*t);
+  let win=.5-.5*Math.cos(2*Math.PI*i/(SYNC_N-1));
+  a[i]=.72*win*Math.sin(phase);
+ }
+ return a;
+}
+const CHIRP=makeChirp();
+const CHIRP_E=CHIRP.reduce((s,x)=>s+x*x,0);
+
+function makeTone(freq,n,amp=.5){
+ let a=new Float32Array(n);
+ for(let i=0;i<n;i++){
+  let edge=Math.min(1,i/80,(n-1-i)/80);
+  a[i]=amp*edge*Math.sin(2*Math.PI*freq*i/FS);
+ }
+ return a;
+}
+const MODE_TONES=MODE_FREQ.map(f=>makeTone(f,MODE_N,.55));
+const SIL1=new Float32Array(GAP1),SIL2=new Float32Array(MODE_GAP),SIL3=new Float32Array(INTER_GAP);
+
+function frameAudio(frame,cfg){
+ let syms=encodeOFDMPacket(frame,cfg);
+ let total=LEAD_N+LEAD_GAP+SYNC_N+GAP1+MODE_N+MODE_GAP+syms.reduce((s,a)=>s+a.length,0)+INTER_GAP;
+ let out=new Float32Array(total),p=0;
+ out.set(LEAD,p);p+=LEAD_N;
+ p+=LEAD_GAP;
+ out.set(CHIRP,p);p+=SYNC_N;
+ p+=GAP1;
+ out.set(MODE_TONES[cfg.id],p);p+=MODE_N;
+ p+=MODE_GAP;
+ for(const s of syms){out.set(s,p);p+=s.length}
+ return out;
+}
+function frameSampleCount(frameLen,cfg){
+ let B=cfg.bins.length/4,L=cfg.N+cfg.cp,ds=Math.ceil(frameLen/B);
+ return LEAD_N+LEAD_GAP+SYNC_N+GAP1+MODE_N+MODE_GAP+(1+ds)*L+INTER_GAP;
+}
+
+/* ======================== 송신 준비 ======================== */
+async function prepare(force=false){
+ if(prepared&&!force)return prepared;
+ $('sendStatus').textContent='데이터 준비 중...';
+ let c=await buildContainer(),cfg=MODES[$('mode').value],txid=random16();
+ let frames=buildFrames(c.bytes,cfg,txid);
+ prepared={c,cfg,txid,frames};
+ refreshEstimate(prepared);
+ $('sendStatus').textContent='전송 준비 완료';
+ return prepared;
+}
+
+function refreshEstimate(p=null){
+ try{
+  let cfg=MODES[$('mode').value],rep=+$('repeat').value;
+  if(!p){
+   $('estimate').textContent='설정을 변경했습니다. 전송 시 다시 계산됩니다.';
+   return;
+  }
+  let samples=0;
+  for(const fr of p.frames)samples+=frameSampleCount(fr.length,cfg)*rep;
+  let sec=samples/FS,size=44+samples*2;
+  $('estimate').textContent=
+   `${cfg.label} / ${p.frames.length}프레임 / 반복 ×${rep}\n`+
+   `예상 전송 ${fmtTime(sec)} / WAV 약 ${fmtBytes(size)}\n`+
+   `원본 ${fmtBytes(p.c.input.data.length)} → 전송 데이터 ${fmtBytes(p.c.data.length)}${p.c.flag?' (GZIP)':''}`;
+ }catch(e){}
+}
+
+async function refreshInput(){
+ prepared=null;
+ try{
+  let x=await currentInput();
+  $('fileInfo').textContent=`${x.name}\n${x.type}\n${fmtBytes(x.data.length)}`;
+ }catch(e){$('fileInfo').textContent='선택된 데이터 없음'}
+ refreshEstimate();
+}
+$('sendFile').onchange=refreshInput;
+$('sendText').oninput=()=>{prepared=null;refreshInput()};
+$('textName').oninput=()=>{prepared=null};
+$('mode').onchange=()=>{prepared=null;refreshEstimate()};
+$('compression').onchange=()=>{prepared=null;refreshEstimate()};
+$('repeat').onchange=()=>refreshEstimate(prepared);
+
+/* ======================== 직접 송신 ======================== */
+let txCtx=null,txSource=null;
+async function getTxCtx(){
+ if(!txCtx||txCtx.state==='closed'){
+  txCtx=new(window.AudioContext||window.webkitAudioContext)({sampleRate:FS,latencyHint:'playback'});
+ }
+ await txCtx.resume();return txCtx;
+}
+function floatBuffer(ctx,data){
+ let b=ctx.createBuffer(1,data.length,FS);
+ b.copyToChannel(data,0);return b;
+}
+function playBuffer(ctx,data){
+ return new Promise((resolve,reject)=>{
+  let s=ctx.createBufferSource();txSource=s;s.buffer=floatBuffer(ctx,data);
+  s.connect(ctx.destination);s.onended=resolve;
+  try{s.start()}catch(e){reject(e)}
+ });
+}
+$('transmit').onclick=async()=>{
+ try{
+  sendStop=false;
+  let p=await prepare(false),rep=+$('repeat').value,ctx=await getTxCtx();
+  let total=p.frames.length*rep,done=0;
+  $('sendStatus').textContent='소리 전송 시작';
+  for(let i=0;i<p.frames.length&&!sendStop;i++){
+   let audio=frameAudio(p.frames[i],p.cfg);
+   let buf=floatBuffer(ctx,audio);
+   for(let r=0;r<rep&&!sendStop;r++){
+    await new Promise((resolve,reject)=>{
+     let s=ctx.createBufferSource();txSource=s;s.buffer=buf;s.connect(ctx.destination);
+     s.onended=resolve;try{s.start()}catch(e){reject(e)}
+    });
+    done++;$('sendProgress').value=done/total;
+    $('sendStatus').textContent=`전송 중 ${done}/${total}\n프레임 ${i+1}/${p.frames.length}`;
+   }
+   await sleep(0);
+  }
+  $('sendStatus').textContent=sendStop?'전송 중지':'전송 완료';
+ }catch(e){$('sendStatus').textContent='오류: '+e.message}
+};
+$('stopSend').onclick=()=>{
+ sendStop=true;
+ if(txSource)try{txSource.stop()}catch(e){}
+};
+
+/* ======================== WAV 생성 ======================== */
+function pcm16(data){
+ let a=new Int16Array(data.length);
+ for(let i=0;i<data.length;i++)a[i]=Math.max(-32768,Math.min(32767,Math.round(data[i]*32767)));
+ return a;
+}
+function wavHeader(samples){
+ let b=new ArrayBuffer(44),v=new DataView(b),bytes=samples*2;
+ const s=(o,x)=>{for(let i=0;i<x.length;i++)v.setUint8(o+i,x.charCodeAt(i))};
+ s(0,'RIFF');v.setUint32(4,36+bytes,true);s(8,'WAVE');s(12,'fmt ');
+ v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);
+ v.setUint32(24,FS,true);v.setUint32(28,FS*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);
+ s(36,'data');v.setUint32(40,bytes,true);return b;
+}
+$('wav').onclick=async()=>{
+ try{
+  sendStop=false;
+  let p=await prepare(false),rep=+$('repeat').value,samples=0;
+  for(const fr of p.frames)samples+=frameSampleCount(fr.length,p.cfg)*rep;
+  let size=44+samples*2;
+  if(size>250*1024*1024)throw new Error('예상 WAV가 250MB를 넘어 직접 전송을 권장합니다.');
+
+  let parts=[wavHeader(samples)],total=p.frames.length*rep,done=0;
+  $('sendStatus').textContent='WAV 생성 중...';
+
+  for(let i=0;i<p.frames.length&&!sendStop;i++){
+   let audio=frameAudio(p.frames[i],p.cfg),pc=pcm16(audio);
+   for(let r=0;r<rep;r++){parts.push(pc);done++}
+   $('sendProgress').value=done/total;
+   $('sendStatus').textContent=`WAV 생성 ${done}/${total}`;
+   if(i%2===0)await sleep(0);
+  }
+  if(sendStop){$('sendStatus').textContent='생성 중지';return}
+
+  let blob=new Blob(parts,{type:'audio/wav'});
+  if(lastWavURL)URL.revokeObjectURL(lastWavURL);
+  lastWavURL=URL.createObjectURL(blob);$('wavPreview').src=lastWavURL;
+  let a=document.createElement('a');a.href=lastWavURL;a.download='acoustic_transfer.wav';a.click();
+  $('sendStatus').textContent=`WAV 완료 · ${fmtBytes(blob.size)}`;
+ }catch(e){$('sendStatus').textContent='오류: '+e.message}
+};
+
+/* ======================== 수신 DSP ======================== */
+function goertzel(a,f){
+ let w=2*Math.PI*f/FS,c=2*Math.cos(w),s0=0,s1=0,s2=0;
+ for(let i=0;i<a.length;i++){s0=a[i]+c*s1-s2;s2=s1;s1=s0}
+ let p=s1*s1+s2*s2-c*s1*s2;
+ return Math.sqrt(Math.max(0,p))/a.length;
+}
+
+class Receiver{
+ constructor(){
+  this.ringSize=8192;
+  this.ring=new Float32Array(this.ringSize);
+  this.resetAll();
+ }
+ resetDSP(){
+  this.state='scan';this.abs=0;this.ringPos=0;this.ringCount=0;
+  this.scanBlock=[];this.activeBlocks=0;this.roughEnd=0;this.searchLo=0;this.searchHi=0;
+  this.bestCorr=0;this.bestEnd=0;
+  this.modeBuf=[];this.cfg=null;this.dataStart=0;this.symBuf=[];
+  this.prev=null;this.frameBytes=[];this.expected=0;
+ }
+ resetAll(){
+  this.resetDSP();this.frames=new Map();this.total=0;this.txid=null;
+  this.good=0;this.bad=0;this.syncs=0;this.resultDone=false;
+  updateRxUI(this,'초기화');
+ }
+ sampleAt(index){
+  let oldestAbs=this.abs-this.ringCount;
+  if(index<oldestAbs||index>=this.abs)return 0;
+  let oldest=(this.ringPos-this.ringCount+this.ringSize)%this.ringSize;
+  return this.ring[(oldest+(index-oldestAbs))%this.ringSize];
+ }
+ corrAtEnd(end){
+  let start=end-SYNC_N,sum=0,e=0;
+  for(let i=0;i<SYNC_N;i++){
+   let x=this.sampleAt(start+i);sum+=x*CHIRP[i];e+=x*x;
+  }
+  return e?Math.abs(sum)/Math.sqrt(e*CHIRP_E):0;
+ }
+ pushRing(x){
+  this.ring[this.ringPos]=x;this.ringPos=(this.ringPos+1)%this.ringSize;
+  if(this.ringCount<this.ringSize)this.ringCount++;
+ }
+ abortFrame(){
+  this.bad++;this.state='scan';this.scanBlock=[];this.activeBlocks=0;this.bestCorr=0;this.modeBuf=[];this.symBuf=[];
+  this.prev=null;this.frameBytes=[];this.expected=0;updateRxUI(this,'프레임 오류 · 다음 동기 대기');
+ }
+ parseHeader(){
+  if(this.frameBytes.length<FRAME_HEADER)return;
+  let a=this.frameBytes;
+  if(a[0]!==0xd3||a[1]!==0x91||a[2]!==1||a[3]!==this.cfg.id){this.abortFrame();return}
+  let len=r16(a,8);
+  if(len>this.cfg.payload){this.abortFrame();return}
+  this.expected=FRAME_HEADER+len;
+ }
+ async finishFrame(){
+  let a=Uint8Array.from(this.frameBytes.slice(0,this.expected));
+  let seq=r16(a,4),total=r16(a,6),len=r16(a,8),txid=r16(a,10),want=r32(a,12);
+  let chk=new Uint8Array(12+len);chk.set(a.slice(0,12));chk.set(a.slice(16,16+len),12);
+  if(crc32(chk)!==want){this.abortFrame();return}
+
+  if(this.txid===null||this.txid!==txid){
+   if(this.txid!==null){
+    this.frames.clear();this.good=0;this.resultDone=false;
+    $('result').hidden=true;
+   }
+   this.txid=txid;this.total=total;
+  }
+  if(total!==this.total||seq>=total){this.abortFrame();return}
+  if(!this.frames.has(seq)){this.frames.set(seq,a.slice(16,16+len));this.good++}
+  this.state='scan';this.scanBlock=[];this.activeBlocks=0;this.bestCorr=0;this.prev=null;this.frameBytes=[];this.expected=0;
+  updateRxUI(this,`프레임 ${seq+1}/${total} 정상`);
+
+  if(this.frames.size===this.total&&!this.resultDone){
+   this.resultDone=true;
+   try{await assembleResult(this)}
+   catch(e){this.resultDone=false;updateRxUI(this,'복원 오류: '+e.message)}
+  }
+ }
+ processSymbol(block){
+  let cur=carrierSpectrum(block,this.cfg);
+  if(!this.prev){this.prev=cur;return}
+  let d=decodeDiff(this.prev,cur,this.cfg);this.prev=cur;
+  for(const b of d.bytes)this.frameBytes.push(b);
+  if(!this.expected&&this.frameBytes.length>=FRAME_HEADER)this.parseHeader();
+  if(this.expected&&this.frameBytes.length>=this.expected)this.finishFrame();
+ }
+ feedOne(x){
+  this.pushRing(x);this.abs++;
+
+  if(this.state==='scan'){
+   this.scanBlock.push(x);
+   if(this.scanBlock.length>=SCAN_N){
+    let a=Float32Array.from(this.scanBlock);this.scanBlock=[];
+    let rms=0;for(let i=0;i<a.length;i++)rms+=a[i]*a[i];rms=Math.sqrt(rms/a.length);
+    let a1=goertzel(a,LEAD_F1),a2=goertzel(a,LEAD_F2);
+    let th=Math.max(.004,rms*.10);
+    if(rms>.004&&a1>th&&a2>th){
+     this.activeBlocks++;
+    }else if(this.activeBlocks>=6){
+     this.roughEnd=this.abs;
+     this.searchLo=this.roughEnd+LEAD_GAP+SYNC_N-SEARCH_PAD;
+     this.searchHi=this.roughEnd+LEAD_GAP+SYNC_N+SEARCH_PAD;
+     this.state='chirpWait';this.activeBlocks=0;
+    }else this.activeBlocks=0;
+   }
+   return;
+  }
+
+  if(this.state==='chirpWait'){
+   if(this.abs>=this.searchHi+16){
+    let best=0,end=0;
+    for(let e=this.searchLo;e<=this.searchHi;e+=4){
+     let q=this.corrAtEnd(e);if(q>best){best=q;end=e}
+    }
+    let lo=Math.max(this.searchLo,end-6),hi=Math.min(this.searchHi,end+6);
+    for(let e=lo;e<=hi;e++){
+     let q=this.corrAtEnd(e);if(q>best){best=q;end=e}
+    }
+    if(best<.10){this.abortFrame();return}
+    this.bestEnd=end;this.bestCorr=best;this.syncs++;
+    this.modeStart=end+GAP1;this.modeEnd=this.modeStart+MODE_N;
+    this.modeBuf=[];this.state='mode';updateRxUI(this,`동기 감지 ${(best*100).toFixed(0)}%`);
+   }
+   return;
+  }
+
+  if(this.state==='mode'){
+   if(this.abs>this.modeStart&&this.abs<=this.modeEnd)this.modeBuf.push(x);
+   if(this.abs>=this.modeEnd){
+    let a=Float32Array.from(this.modeBuf),best=-1,id=0;
+    for(let i=0;i<4;i++){let v=goertzel(a,MODE_FREQ[i]);if(v>best){best=v;id=i}}
+    this.cfg=MODE_BY_ID[id];
+    if(!this.cfg||best<.005){this.abortFrame();return}
+    this.dataStart=this.bestEnd+GAP1+MODE_N+MODE_GAP;
+    this.state='waitData';updateRxUI(this,`모드 ${this.cfg.label}`);
+   }
+   return;
+  }
+
+  if(this.state==='waitData'){
+   if(this.abs>this.dataStart){this.state='data';this.symBuf=[x]}
+   return;
+  }
+
+  if(this.state==='data'){
+   this.symBuf.push(x);
+   let L=this.cfg.N+this.cfg.cp;
+   if(this.symBuf.length>=L){
+    let b=Float32Array.from(this.symBuf.slice(0,L));this.symBuf=[];
+    this.processSymbol(b);
+   }
+  }
+ }
+ feed(a){
+  for(let i=0;i<a.length;i++)this.feedOne(a[i]);
+ }
+ missing(){
+  let a=[];for(let i=0;i<this.total;i++)if(!this.frames.has(i))a.push(i+1);return a;
+ }
+}
+const RX=new Receiver();
+
+function updateRxUI(rx,msg=''){
+ $('signalPill').textContent='동기 '+rx.syncs;
+ $('goodPill').textContent='정상 '+rx.good;
+ $('badPill').textContent='오류 '+rx.bad;
+ $('rxProgress').value=rx.total?rx.frames.size/rx.total:0;
+ if(rx.resultDone)$('rxHeadline').textContent='완료';
+ else if(rx.total)$('rxHeadline').textContent=`${rx.frames.size} / ${rx.total}`;
+ else if(rx.state!=='scan')$('rxHeadline').textContent='신호 분석 중';
+ else $('rxHeadline').textContent='수신 대기';
+ let miss=rx.total?rx.missing() : [];
+ $('rxStatus').textContent=
+  (msg?msg+'\n':'')+
+  (rx.total?`수신 ${rx.frames.size}/${rx.total} · 누락 ${miss.length}`:'프레임 대기')+
+  (miss.length&&miss.length<=20?`\n누락: ${miss.join(', ')}`:'');
+}
+
+/* ======================== 최종 컨테이너 복원 ======================== */
+let resultURL='',resultBlob=null,resultName='',resultText='';
+async function assembleResult(rx){
+ let parts=[];
+ for(let i=0;i<rx.total;i++){let p=rx.frames.get(i);if(!p)throw new Error('프레임 누락');parts.push(p)}
+ let a=concat(parts);
+ if(a.length<CONTAINER_HEADER||a[0]!==65||a[1]!==70||a[2]!==84||a[3]!==49||a[4]!==1)
+  throw new Error('컨테이너 헤더 오류');
+
+ let flag=a[5],nl=r16(a,6),ml=r16(a,8),orig=r32(a,10),len=r32(a,14),want=r32(a,18);
+ let p=CONTAINER_HEADER;
+ if(p+nl+ml+len>a.length)throw new Error('컨테이너 길이 오류');
+ let name=new TextDecoder().decode(a.slice(p,p+nl));p+=nl;
+ let mime=new TextDecoder().decode(a.slice(p,p+ml));p+=ml;
+ let data=a.slice(p,p+len);
+ if(crc32(data)!==want)throw new Error('전체 CRC 불일치');
+
+ let raw=flag?await gunzip(data):data;
+ if(raw.length!==orig)throw new Error('원본 크기 불일치');
+
+ resultBlob=new Blob([raw],{type:mime||'application/octet-stream'});
+ resultName=name||'received.bin';
+ if(resultURL)URL.revokeObjectURL(resultURL);
+ resultURL=URL.createObjectURL(resultBlob);
+
+ $('result').hidden=false;
+ $('resultInfo').textContent=`${resultName}\n${mime||'application/octet-stream'}\n${fmtBytes(raw.length)}\n전체 CRC 일치`;
+ resultText='';
+ if((mime||'').startsWith('text/')||/\.(txt|html?|css|js|json|xml|csv|md|log)$/i.test(resultName)){
+  resultText=new TextDecoder().decode(raw);
+  $('preview').textContent=resultText.slice(0,20000)+(resultText.length>20000?'\n…미리보기 생략':'');
+  $('copyText').disabled=false;
+ }else{
+  $('preview').textContent='바이너리 파일 · 저장 버튼으로 원본을 복원할 수 있습니다.';
+  $('copyText').disabled=true;
+ }
+ updateRxUI(rx,'전체 CRC 일치 · 원본 복원 완료');
+}
+$('downloadResult').onclick=()=>{
+ if(!resultURL)return;
+ let a=document.createElement('a');a.href=resultURL;a.download=resultName;a.click();
+};
+$('copyText').onclick=()=>navigator.clipboard.writeText(resultText);
+
+/* ======================== 마이크 입력 ======================== */
+let micCtx=null,micStream=null,micSrc=null,micNode=null,micGain=null;
+$('micStart').onclick=async()=>{
+ try{
+  if(!window.isSecureContext)throw new Error('마이크는 GitHub Pages(HTTPS) 또는 설치된 앱에서 실행하세요.');
+  await stopMic();
+  micStream=await navigator.mediaDevices.getUserMedia({
+   audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false,channelCount:1}
+  });
+  micCtx=new(window.AudioContext||window.webkitAudioContext)({sampleRate:FS,latencyHint:'interactive'});
+  await micCtx.resume();
+  if(micCtx.sampleRate!==FS)throw new Error('48kHz 오디오 컨텍스트를 만들 수 없습니다.');
+  micSrc=micCtx.createMediaStreamSource(micStream);
+  micNode=micCtx.createScriptProcessor(1024,1,1);
+  micGain=micCtx.createGain();micGain.gain.value=0;
+  micSrc.connect(micNode);micNode.connect(micGain).connect(micCtx.destination);
+  micNode.onaudioprocess=e=>RX.feed(e.inputBuffer.getChannelData(0));
+  updateRxUI(RX,'마이크 수신 중');
+ }catch(e){updateRxUI(RX,'마이크 오류: '+e.message)}
+};
+async function stopMic(){
+ if(micNode){micNode.onaudioprocess=null;try{micNode.disconnect()}catch(e){}}
+ if(micSrc)try{micSrc.disconnect()}catch(e){}
+ if(micStream)micStream.getTracks().forEach(t=>t.stop());
+ if(micCtx&&micCtx.state!=='closed')try{await micCtx.close()}catch(e){}
+ micCtx=micStream=micSrc=micNode=micGain=null;
+}
+$('micStop').onclick=async()=>{await stopMic();updateRxUI(RX,'마이크 중지')};
+$('rxReset').onclick=async()=>{
+ await stopMic();RX.resetAll();$('result').hidden=true;resultBlob=null;resultText='';
+};
+
+/* ======================== 오디오 파일 분석 ======================== */
+let audioCtx=null,audioBuffer=null,audioRun=0;
+$('audioFile').onchange=async e=>{
+ try{
+  let f=e.target.files[0];if(!f)return;
+  if(!audioCtx||audioCtx.state==='closed')
+   audioCtx=new(window.AudioContext||window.webkitAudioContext)({sampleRate:FS});
+  await audioCtx.resume();
+  audioBuffer=await audioCtx.decodeAudioData((await f.arrayBuffer()).slice(0));
+  if(audioBuffer.sampleRate!==FS)throw new Error('오디오를 48kHz로 디코딩하지 못했습니다.');
+  updateRxUI(RX,`음향 파일 준비 · ${f.name}\n${fmtTime(audioBuffer.duration)}`);
+ }catch(e){updateRxUI(RX,'오디오 파일 오류: '+e.message)}
+};
+function monoBuffer(b){
+ if(b.numberOfChannels===1)return b.getChannelData(0);
+ let n=b.length,o=new Float32Array(n);
+ for(let c=0;c<b.numberOfChannels;c++){
+  let a=b.getChannelData(c);for(let i=0;i<n;i++)o[i]+=a[i]/b.numberOfChannels;
+ }
+ return o;
+}
+$('analyze').onclick=async()=>{
+ if(!audioBuffer){updateRxUI(RX,'오디오 파일을 선택하세요.');return}
+ let id=++audioRun,data=monoBuffer(audioBuffer),block=8192;
+ updateRxUI(RX,'최고속 분석 중');
+ for(let p=0;p<data.length&&id===audioRun;p+=block){
+  RX.feed(data.subarray(p,Math.min(data.length,p+block)));
+  $('rxProgress').value=RX.total?RX.frames.size/RX.total:p/data.length;
+  if((p/block)%8===0)await sleep(0);
+ }
+ if(!RX.resultDone){
+  let m=RX.missing();
+  updateRxUI(RX,`분석 종료 · ${m.length?'같은 전송을 다시 분석하면 누락 프레임을 채울 수 있습니다.':'복원 실패'}`);
+ }
+};
+$('simulate').onclick=async()=>{
+ if(!audioBuffer){updateRxUI(RX,'오디오 파일을 선택하세요.');return}
+ let id=++audioRun,data=monoBuffer(audioBuffer),pos=0,start=performance.now();
+ updateRxUI(RX,'1배속 모의실험 중');
+ function tick(){
+  if(id!==audioRun)return;
+  let target=Math.min(data.length,Math.floor((performance.now()-start)*FS/1000));
+  if(target>pos){RX.feed(data.subarray(pos,target));pos=target}
+  if(pos<data.length)requestAnimationFrame(tick);
+  else if(!RX.resultDone)updateRxUI(RX,'1배속 모의실험 종료');
+ }
+ requestAnimationFrame(tick);
+};
+
+/* ======================== 초기 상태 ======================== */
+window.addEventListener('load',()=>{
+ if(!window.isSecureContext)$('micStart').title='로컬 content:// 파일에서는 마이크 권한이 차단될 수 있습니다.';
+ let saved=localStorage.getItem('aft.mode');if(saved&&MODES[saved])$('mode').value=saved;
+});
+$('mode').addEventListener('change',()=>localStorage.setItem('aft.mode',$('mode').value));
+</script>
+</body>
+</html>

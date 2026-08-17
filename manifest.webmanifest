@@ -1,0 +1,25 @@
+{
+  "id": "./",
+  "name": "Acoustic Transfer",
+  "short_name": "AFT",
+  "description": "오프라인 음향 파일 전송 인코더/디코더",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#101114",
+  "theme_color": "#101114",
+  "icons": [
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
